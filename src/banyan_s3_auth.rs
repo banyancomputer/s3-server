@@ -25,8 +25,9 @@ struct SKWrap(SecretKey);
 
 impl<'de> Deserialize<'de> for SKWrap {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de> {
+    where
+        D: serde::Deserializer<'de>,
+    {
         let s: String = Deserialize::deserialize(deserializer)?;
         Ok(SKWrap(SecretKey::from(s)))
     }
@@ -34,6 +35,8 @@ impl<'de> Deserialize<'de> for SKWrap {
 
 // TODO maybe authentication and authorization should be separate functions?
 // TODO should they all be in the same database? I'm not convinced of anything at this point,
+// TODO vera thinks maybe same data base and we just write a super duper aggro test suite... maybe a good idea
+// i have anxiety
 impl BanyanS3Auth {
     pub async fn new(auth_endpoint: String, key_endpoint: String) -> Result<Self> {
         let auth_database_connection = Arc::new(FirestoreDb::new(auth_endpoint).await?);
@@ -79,19 +82,23 @@ impl BanyanS3Auth {
         Ok(())
     }
 
+    // TODO could this be "outsourced to security rules"? - vera
     pub async fn get_decryption_key_from_db(&self, access_key: &str) -> S3Result<SecretKey> {
-        let skw: SKWrap = self.key_database_connection
+        let skw: SKWrap = self
+            .key_database_connection
             .fluent()
             .select()
             .by_id_in("KEYS")
             .obj()
             .one(access_key)
             .await
-            .map_err(|e| s3_error!(
-                InternalError,
-                "Error looking up decryption key in key database: {}",
-                e
-            ))?
+            .map_err(|e| {
+                s3_error!(
+                    InternalError,
+                    "Error looking up decryption key in key database: {}",
+                    e
+                )
+            })?
             .ok_or(s3_error!(
                 InvalidAccessKeyId,
                 "decryption key not found in key database"
@@ -104,7 +111,8 @@ impl BanyanS3Auth {
 impl S3Auth for BanyanS3Auth {
     async fn get_secret_key(&self, access_key: &str) -> S3Result<SecretKey> {
         // first, authenticate that the auth database says that the access key is valid and allowed to be used for s3 stuff
-        self.authenticate_and_check_s3_permissions(access_key).await?;
+        self.authenticate_and_check_s3_permissions(access_key)
+            .await?;
         // then, if it is, look up the secret key in the key database
         self.get_decryption_key_from_db(access_key).await
     }

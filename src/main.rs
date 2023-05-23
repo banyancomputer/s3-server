@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use clap::Parser;
 
 mod banyan_s3_auth;
+mod mutex_memory_blockstore;
 mod wnfs_s3_service;
 
 /// start banyan s3 service
@@ -15,7 +16,8 @@ struct Args {
     #[arg(long)]
     auth_endpoint: String,
 
-   #[arg(long)]
+    /// Key endpoint for WNFS decryption keys
+    #[arg(long)]
     key_endpoint: String,
 }
 
@@ -29,12 +31,11 @@ async fn main() {
 
     let s3_service = {
         let wnfs_s3_service = wnfs_s3_service::WnfsS3Service::new();
-        let banyan_s3_auth = banyan_s3_auth::BanyanS3Auth::new(args.auth_endpoint, args.key_endpoint).await.map_err(|e| {
-            anyhow::anyhow!(
-                "couldn't connect to auth database: {}",
-                e
-            )
-        }).unwrap();
+        let banyan_s3_auth =
+            banyan_s3_auth::BanyanS3Auth::new(args.auth_endpoint, args.key_endpoint)
+                .await
+                .map_err(|e| anyhow::anyhow!("couldn't connect to auth database: {}", e))
+                .unwrap();
         let mut service_builder = S3ServiceBuilder::new(wnfs_s3_service);
         service_builder.set_auth(banyan_s3_auth);
         // service_builder.set_base_domain("localhost:3000"); ???
