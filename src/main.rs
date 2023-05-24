@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use clap::Parser;
 
 mod banyan_s3_auth;
+mod multipart_uploads;
 mod mutex_memory_blockstore;
 mod wnfs_s3_service;
 

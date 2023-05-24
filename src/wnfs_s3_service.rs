@@ -76,6 +76,8 @@ impl S3 for WnfsS3Service {
         &self,
         _req: S3Request<CreateMultipartUploadInput>,
     ) -> S3Result<CreateMultipartUploadOutput> {
+        // generate UUID
+
         Err(s3_error!(
             NotImplemented,
             "CreateMultipartUpload is not implemented yet"
@@ -265,6 +267,14 @@ impl S3 for WnfsS3Service {
     }
 
     async fn upload_part(&self, _req: S3Request<UploadPartInput>) -> S3Result<UploadPartOutput> {
+        // check write access to this bucket and object- which bucket and object are in the request
+        todo!("check write access to this bucket and object- which bucket and object are in the request");
+        // check if the upload id is valid
+
+        // stick it in the upload part table
+
+        // done
+        
         Err(s3_error!(
             NotImplemented,
             "UploadPart is not implemented yet"
