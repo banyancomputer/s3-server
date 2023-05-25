@@ -31,16 +31,37 @@ fn transmute_result_for_s3error<T>(
     })
 }
 
+/// a safe string is a string that is safe to use in our little macros below
+/// ie, no slashes!
+pub(crate) struct SafeString {
+    inner: String,
+}
+
+impl SafeString {
+    pub(crate) fn new(ini: String) -> Self {
+        Self {
+            inner: ini.replace("/", "%2F"),
+        }
+    }
+}
+
+impl std::fmt::Display for SafeString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl From<String> for SafeString {
+    fn from(s: String) -> Self {
+        Self::new(s)
+    }
+}
+
 /// a macro to stringbuild the directory where parts will live
 /// the directory is the bucket name, the object name, and the upload id
 macro_rules! multipart_loc {
     ($bucket_name:expr, $object_name:expr, $upload_id:expr) => {
-        format!(
-            "{}-{}-{}",
-            $bucket_name,
-            $object_name,
-            $upload_id.to_string()
-        )
+        format!("{}-{}-{}", $bucket_name, $object_name, $upload_id)
     };
 }
 
@@ -50,7 +71,7 @@ macro_rules! multipart_loc_with_part {
     ($bucket_name:expr, $object_name:expr, $upload_id:expr, $part_number:expr) => {
         format!(
             "{}/{}",
-            multipart_loc!($bucket_name, $object_name, $upload_id.to_string()),
+            multipart_loc!($bucket_name, $object_name, $upload_id),
             $part_number
         )
     };
@@ -62,7 +83,7 @@ macro_rules! multipart_loc_with_marker {
     ($bucket_name:expr, $object_name:expr, $upload_id:expr) => {
         format!(
             "{}/marker",
-            multipart_loc!($bucket_name, $object_name, $upload_id.to_string())
+            multipart_loc!($bucket_name, $object_name, $upload_id)
         )
     };
 }
@@ -180,9 +201,9 @@ impl CloudStorageForMultipartConstruction {
     /// marks the existence of the bucket with a creation time. eventually we'll use to clean up partial uploads.
     pub async fn create_multipart_upload_folder(
         &self,
-        client_bucket_name: String,
-        client_object_name: String,
-        upload_id: String,
+        client_bucket_name: SafeString,
+        client_object_name: SafeString,
+        upload_id: SafeString,
     ) -> S3Result<()> {
         // create a folder in the cloud storage bucket for this multipart upload
         let upload_type = UploadType::Simple(Media::new(multipart_loc_with_marker!(
@@ -209,9 +230,9 @@ impl CloudStorageForMultipartConstruction {
     /// checks that the upload exists in the cloud storage bucket
     pub async fn check_upload_exists(
         &self,
-        client_bucket_name: String,
-        client_object_name: String,
-        upload_id: String,
+        client_bucket_name: SafeString,
+        client_object_name: SafeString,
+        upload_id: SafeString,
     ) -> S3Result<bool> {
         // check that the part_id exists in the cloud storage bucket- it should be at
         let list_object_req = ListObjectsRequest {
@@ -236,9 +257,9 @@ impl CloudStorageForMultipartConstruction {
     /// puts a part into the initiated spot for the upload
     pub async fn put_upload_part(
         &self,
-        client_bucket_name: String,
-        client_object_name: String,
-        upload_id: String,
+        client_bucket_name: SafeString,
+        client_object_name: SafeString,
+        upload_id: SafeString,
         part_no: u32,
         body: StreamingBlob,
     ) -> S3Result<()> {
@@ -269,9 +290,9 @@ impl CloudStorageForMultipartConstruction {
     /// deletes all the parts and the upload folder
     pub async fn cleanup_upload(
         &self,
-        client_bucket_name: String,
-        client_object_name: String,
-        upload_id: String,
+        client_bucket_name: SafeString,
+        client_object_name: SafeString,
+        upload_id: SafeString,
     ) -> S3Result<()> {
         // list the objects in the right folder
         let list_object_req = ListObjectsRequest {
@@ -462,9 +483,9 @@ impl CloudStorageForMultipartConstruction {
 
     pub async fn upload_part(
         &self,
-        client_bucket_name: String,
-        client_object_name: String,
-        upload_id: String,
+        client_bucket_name: SafeString,
+        client_object_name: SafeString,
+        upload_id: SafeString,
         part_number: u32,
         body: StreamingBlob,
     ) -> S3Result<()> {
@@ -493,9 +514,9 @@ impl CloudStorageForMultipartConstruction {
 
     pub async fn finish_upload(
         &self,
-        client_bucket_name: String,
-        client_object_name: String,
-        upload_id: String,
+        client_bucket_name: SafeString,
+        client_object_name: SafeString,
+        upload_id: SafeString,
     ) -> S3Result<()> {
         let root = multipart_loc!(client_bucket_name, client_object_name, upload_id);
         // list the objects in the right folder

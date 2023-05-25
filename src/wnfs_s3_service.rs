@@ -41,9 +41,12 @@ impl S3 for WnfsS3Service {
         req: S3Request<AbortMultipartUploadInput>,
     ) -> S3Result<AbortMultipartUploadOutput> {
         todo!("PERMISSIONING");
-        todo!("what if bucket or key have '/' in them?");
         self.multipart_cloud_storage
-            .cleanup_upload(req.input.bucket, req.input.key, req.input.upload_id)
+            .cleanup_upload(
+                req.input.bucket.into(),
+                req.input.key.into(),
+                req.input.upload_id.into(),
+            )
             .await?;
         Ok(AbortMultipartUploadOutput {
             ..Default::default()
@@ -55,9 +58,12 @@ impl S3 for WnfsS3Service {
         req: S3Request<CompleteMultipartUploadInput>,
     ) -> S3Result<CompleteMultipartUploadOutput> {
         todo!("PERMISSIONING");
-        todo!("what if bucket or key have '/' in them?");
         self.multipart_cloud_storage
-            .finish_upload(req.input.bucket, req.input.key, req.input.upload_id)
+            .finish_upload(
+                req.input.bucket.into(),
+                req.input.key.into(),
+                req.input.upload_id.into(),
+            )
             .await?;
         Err(s3_error!(
             NotImplemented,
@@ -86,13 +92,16 @@ impl S3 for WnfsS3Service {
         &self,
         req: S3Request<CreateMultipartUploadInput>,
     ) -> S3Result<CreateMultipartUploadOutput> {
-        todo!("what if bucket or key have '/' in them?");
         todo!("PERMISSIONING");
         // generate UUID
         let uuid = uuid::Uuid::new_v4().to_string();
         // create multipart upload
         self.multipart_cloud_storage
-            .create_multipart_upload_folder(req.input.bucket, req.input.key, uuid)
+            .create_multipart_upload_folder(
+                req.input.bucket.into(),
+                req.input.key.into(),
+                uuid.into(),
+            )
             .await?;
         // return that uuid
         Ok(CreateMultipartUploadOutput {
@@ -288,11 +297,14 @@ impl S3 for WnfsS3Service {
     async fn upload_part(&self, req: S3Request<UploadPartInput>) -> S3Result<UploadPartOutput> {
         // check write access to this bucket and object- which bucket and object are in the request
         todo!("check write access to this bucket and object- which bucket and object are in the request- this is IMPORTANT YOU NEED TO DO PERMISSIONING");
-        todo!("what if the bucket or key have a / in them?");
         // check if the upload id is valid
         if !self
             .multipart_cloud_storage
-            .check_upload_exists(req.input.bucket, req.input.key, req.input.upload_id)
+            .check_upload_exists(
+                req.input.bucket.into(),
+                req.input.key.into(),
+                req.input.upload_id.into(),
+            )
             .await?
         {
             return Err(s3_error!(
@@ -306,9 +318,9 @@ impl S3 for WnfsS3Service {
         // stick it in the upload part table
         self.multipart_cloud_storage
             .upload_part(
-                req.input.bucket,
-                req.input.key,
-                req.input.upload_id,
+                req.input.bucket.into(),
+                req.input.key.into(),
+                req.input.upload_id.into(),
                 req.input.part_number as u32,
                 req.input.body.unwrap(),
             )
