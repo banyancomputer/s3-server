@@ -1,6 +1,6 @@
 use hyper::Server;
 use s3s::service::S3ServiceBuilder;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use clap::Parser;
 
@@ -32,14 +32,16 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
     let s3_service = {
-        let wnfs_s3_service = wnfs_s3_service::WnfsS3Service::new().await;
         let banyan_s3_auth =
-            banyan_s3_auth::BanyanS3Auth::new(args.auth_endpoint, args.key_endpoint)
+            Arc::new(banyan_s3_auth::BanyanS3Auth::new(args.auth_endpoint, args.key_endpoint)
                 .await
                 .map_err(|e| anyhow::anyhow!("couldn't connect to auth database: {}", e))
-                .unwrap();
+                .unwrap());
+
+        let wnfs_s3_service = wnfs_s3_service::WnfsS3Service::new(banyan_s3_auth.clone()).await;
+
         let mut service_builder = S3ServiceBuilder::new(wnfs_s3_service);
-        service_builder.set_auth(banyan_s3_auth);
+        service_builder.set_auth(banyan_s3_auth.as_ref());
         // service_builder.set_base_domain("localhost:3000"); ???
         service_builder.build()
     };

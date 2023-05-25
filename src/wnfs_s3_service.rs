@@ -1,3 +1,5 @@
+use std::{sync::Arc};
+
 use s3s::{
     dto::{
         AbortMultipartUploadInput, AbortMultipartUploadOutput, CompleteMultipartUploadInput,
@@ -18,18 +20,20 @@ use s3s::{
     s3_error, S3Request, S3Result, S3,
 };
 
-use crate::multipart_uploads::CloudStorageForMultipartConstruction;
+use crate::{multipart_uploads::CloudStorageForMultipartConstruction, banyan_s3_auth::BanyanS3Auth};
 
 pub struct WnfsS3Service {
     //blockstore: MutexMemoryBlockStore,
     multipart_cloud_storage: CloudStorageForMultipartConstruction,
+    auth: Arc<BanyanS3Auth>,
 }
 
 impl WnfsS3Service {
-    pub async fn new() -> Self {
+    pub async fn new(auth: Arc<BanyanS3Auth>) -> Self {
         Self {
             //blockstore: MutexMemoryBlockStore::new(),
             multipart_cloud_storage: CloudStorageForMultipartConstruction::new().await,
+            auth: auth.clone(),
         }
     }
 }
@@ -40,7 +44,16 @@ impl S3 for WnfsS3Service {
         &self,
         req: S3Request<AbortMultipartUploadInput>,
     ) -> S3Result<AbortMultipartUploadOutput> {
-        todo!("PERMISSIONING");
+        if !self.auth.as_ref().has_write_permission_to_bucket(
+            req.credentials,
+            req.input.bucket,
+        )? {
+            return Err(s3_error!(
+                AccessDenied,
+                "You do not have write permission to this bucket"
+            ));
+        };
+
         self.multipart_cloud_storage
             .cleanup_upload(
                 req.input.bucket.into(),
@@ -57,7 +70,15 @@ impl S3 for WnfsS3Service {
         &self,
         req: S3Request<CompleteMultipartUploadInput>,
     ) -> S3Result<CompleteMultipartUploadOutput> {
-        todo!("PERMISSIONING");
+        if !self.auth.as_ref().has_write_permission_to_bucket(
+            req.credentials,
+            req.input.bucket,
+        )? {
+            return Err(s3_error!(
+                AccessDenied,
+                "You do not have write permission to this bucket"
+            ));
+        };
         self.multipart_cloud_storage
             .finish_upload(
                 req.input.bucket.into(),
@@ -91,7 +112,15 @@ impl S3 for WnfsS3Service {
         &self,
         req: S3Request<CreateMultipartUploadInput>,
     ) -> S3Result<CreateMultipartUploadOutput> {
-        todo!("PERMISSIONING");
+        if !self.auth.as_ref().has_write_permission_to_bucket(
+            req.credentials,
+            req.input.bucket,
+        )? {
+            return Err(s3_error!(
+                AccessDenied,
+                "You do not have write permission to this bucket"
+            ));
+        };
         // generate UUID
         let uuid = uuid::Uuid::new_v4().to_string();
         // create multipart upload
@@ -294,8 +323,16 @@ impl S3 for WnfsS3Service {
     }
 
     async fn upload_part(&self, req: S3Request<UploadPartInput>) -> S3Result<UploadPartOutput> {
-        // check write access to this bucket and object- which bucket and object are in the request
-        todo!("check write access to this bucket and object- which bucket and object are in the request- this is IMPORTANT YOU NEED TO DO PERMISSIONING");
+        // check write access 
+        if !self.auth.as_ref().has_write_permission_to_bucket(
+            req.credentials,
+            req.input.bucket,
+        )? {
+            return Err(s3_error!(
+                AccessDenied,
+                "You do not have write permission to this bucket"
+            ));
+        };
         // check if the upload id is valid
         if !self
             .multipart_cloud_storage

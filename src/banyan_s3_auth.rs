@@ -1,9 +1,9 @@
 use anyhow::Result;
-use std::sync::Arc;
+use std::{sync::Arc};
 
 use firestore::FirestoreDb;
 use s3s::{
-    auth::{S3Auth, SecretKey},
+    auth::{S3Auth, SecretKey, Credentials},
     s3_error, S3Result,
 };
 use serde::Deserialize;
@@ -105,6 +105,10 @@ impl BanyanS3Auth {
             ))?;
         Ok(skw.0)
     }
+
+    pub fn has_write_permission_to_bucket(&self, credentials: Option<Credentials>, bucket_name: String) -> S3Result<bool> {
+        unimplemented!("see how you're passing an 'auth' into wnfss3service? is that good...? is there a better way to do this?");
+    }
 }
 
 #[async_trait::async_trait]
@@ -115,5 +119,12 @@ impl S3Auth for BanyanS3Auth {
             .await?;
         // then, if it is, look up the secret key in the key database
         self.get_decryption_key_from_db(access_key).await
+    }
+}
+
+#[async_trait::async_trait]
+impl S3Auth for &'static BanyanS3Auth {
+    async fn get_secret_key(&self, access_key: &str) -> S3Result<SecretKey> {
+        self.get_secret_key(access_key).await
     }
 }
