@@ -5,8 +5,9 @@ use std::net::SocketAddr;
 use clap::Parser;
 
 mod banyan_s3_auth;
+#[macro_use]
 mod multipart_uploads;
-mod mutex_memory_blockstore;
+//mod mutex_memory_blockstore;
 mod wnfs_s3_service;
 
 /// start banyan s3 service
@@ -31,7 +32,7 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
     let s3_service = {
-        let wnfs_s3_service = wnfs_s3_service::WnfsS3Service::new();
+        let wnfs_s3_service = wnfs_s3_service::WnfsS3Service::new().await;
         let banyan_s3_auth =
             banyan_s3_auth::BanyanS3Auth::new(args.auth_endpoint, args.key_endpoint)
                 .await

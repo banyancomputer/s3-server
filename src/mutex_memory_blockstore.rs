@@ -48,7 +48,7 @@ unsafe impl Sync for MutexMemoryBlockStore {}
 #[async_trait]
 impl BlockStore for MutexMemoryBlockStore {
     /// Stores an array of bytes in the block store.
-    async fn put_block(&mut self, bytes: Vec<u8>, codec: IpldCodec) -> Result<Cid> {
+    async fn put_block(&mut self, bytes: Vec<u8>, codec: wnfs::ipld::IpldCodec) -> Result<Cid> {
         let hash = Code::Sha2_256.digest(&bytes);
         let cid = Cid::new(Version::V1, codec.into(), hash)?;
 
@@ -58,11 +58,13 @@ impl BlockStore for MutexMemoryBlockStore {
     }
 
     /// Retrieves an array of bytes from the block store with given CID.
-    async fn get_block<'a>(&'a self, cid: &Cid) -> Result<Cow<'a, Vec<u8>>> {
+    async fn get_block<'a>(&'a self, cid: &Cid<64>) -> Result<Cow<'a, Vec<u8>>> {
         let bytes = self
             .0
+            .lock()
+            .await
             .get(&cid.to_string())
-            .ok_or(Err(anyhow!("CID not found in blockstore")))?;
+            .ok_or(Err(anyhow!("CID not found in blockstore")));
 
         Ok(Cow::Borrowed(bytes))
     }

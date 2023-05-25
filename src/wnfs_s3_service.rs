@@ -17,18 +17,19 @@ use s3s::{
     },
     s3_error, S3Request, S3Result, S3,
 };
-use wnfs::BlockStore;
 
-use crate::mutex_memory_blockstore::MutexMemoryBlockStore;
+use crate::multipart_uploads::CloudStorageForMultipartConstruction;
 
 pub struct WnfsS3Service {
-    blockstore: dyn BlockStore + Send + Sync + 'static,
+    //blockstore: MutexMemoryBlockStore,
+    multipart_cloud_storage: CloudStorageForMultipartConstruction,
 }
 
 impl WnfsS3Service {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         Self {
-            blockstore: MutexMemoryBlockStore::new(),
+            //blockstore: MutexMemoryBlockStore::new(),
+            multipart_cloud_storage: CloudStorageForMultipartConstruction::new().await,
         }
     }
 }
@@ -37,18 +38,27 @@ impl WnfsS3Service {
 impl S3 for WnfsS3Service {
     async fn abort_multipart_upload(
         &self,
-        _req: S3Request<AbortMultipartUploadInput>,
+        req: S3Request<AbortMultipartUploadInput>,
     ) -> S3Result<AbortMultipartUploadOutput> {
-        Err(s3_error!(
-            NotImplemented,
-            "AbortMultipartUpload is not implemented yet"
-        ))
+        todo!("PERMISSIONING");
+        todo!("what if bucket or key have '/' in them?");
+        self.multipart_cloud_storage
+            .cleanup_upload(req.input.bucket, req.input.key, req.input.upload_id)
+            .await?;
+        Ok(AbortMultipartUploadOutput {
+            ..Default::default()
+        })
     }
 
     async fn complete_multipart_upload(
         &self,
-        _req: S3Request<CompleteMultipartUploadInput>,
+        req: S3Request<CompleteMultipartUploadInput>,
     ) -> S3Result<CompleteMultipartUploadOutput> {
+        todo!("PERMISSIONING");
+        todo!("what if bucket or key have '/' in them?");
+        self.multipart_cloud_storage
+            .finish_upload(req.input.bucket, req.input.key, req.input.upload_id)
+            .await?;
         Err(s3_error!(
             NotImplemented,
             "CompleteMultipartUpload is not implemented yet"
@@ -74,14 +84,23 @@ impl S3 for WnfsS3Service {
 
     async fn create_multipart_upload(
         &self,
-        _req: S3Request<CreateMultipartUploadInput>,
+        req: S3Request<CreateMultipartUploadInput>,
     ) -> S3Result<CreateMultipartUploadOutput> {
+        todo!("what if bucket or key have '/' in them?");
+        todo!("PERMISSIONING");
         // generate UUID
-
-        Err(s3_error!(
-            NotImplemented,
-            "CreateMultipartUpload is not implemented yet"
-        ))
+        let uuid = uuid::Uuid::new_v4().to_string();
+        // create multipart upload
+        self.multipart_cloud_storage
+            .create_multipart_upload_folder(req.input.bucket, req.input.key, uuid)
+            .await?;
+        // return that uuid
+        Ok(CreateMultipartUploadOutput {
+            bucket: Some(req.input.bucket),
+            key: Some(req.input.key),
+            upload_id: Some(uuid.to_string()),
+            ..Default::default()
+        })
     }
 
     async fn delete_bucket(
@@ -266,18 +285,37 @@ impl S3 for WnfsS3Service {
         ))
     }
 
-    async fn upload_part(&self, _req: S3Request<UploadPartInput>) -> S3Result<UploadPartOutput> {
+    async fn upload_part(&self, req: S3Request<UploadPartInput>) -> S3Result<UploadPartOutput> {
         // check write access to this bucket and object- which bucket and object are in the request
-        todo!("check write access to this bucket and object- which bucket and object are in the request");
+        todo!("check write access to this bucket and object- which bucket and object are in the request- this is IMPORTANT YOU NEED TO DO PERMISSIONING");
+        todo!("what if the bucket or key have a / in them?");
         // check if the upload id is valid
-
+        if !self
+            .multipart_cloud_storage
+            .check_upload_exists(req.input.bucket, req.input.key, req.input.upload_id)
+            .await?
+        {
+            return Err(s3_error!(
+                NoSuchUpload,
+                "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."
+            ));
+        }
+        if req.input.body.is_none() {
+            return Err(s3_error!(NotImplemented, "UploadPart without a body???"));
+        }
         // stick it in the upload part table
-
+        self.multipart_cloud_storage
+            .upload_part(
+                req.input.bucket,
+                req.input.key,
+                req.input.upload_id,
+                req.input.part_number as u32,
+                req.input.body.unwrap(),
+            )
+            .await?;
         // done
-        
-        Err(s3_error!(
-            NotImplemented,
-            "UploadPart is not implemented yet"
-        ))
+        Ok(UploadPartOutput {
+            ..Default::default()
+        })
     }
 }
