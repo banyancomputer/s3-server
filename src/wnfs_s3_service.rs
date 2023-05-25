@@ -65,10 +65,9 @@ impl S3 for WnfsS3Service {
                 req.input.upload_id.into(),
             )
             .await?;
-        Err(s3_error!(
-            NotImplemented,
-            "CompleteMultipartUpload is not implemented yet"
-        ))
+        Ok(CompleteMultipartUploadOutput {
+            ..Default::default()
+        })
     }
 
     async fn copy_object(&self, _req: S3Request<CopyObjectInput>) -> S3Result<CopyObjectOutput> {
