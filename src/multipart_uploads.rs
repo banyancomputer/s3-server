@@ -1,6 +1,6 @@
 use bitmaps::Bitmap;
 use chrono::{DateTime, FixedOffset};
-use futures::{stream::BoxStream, FutureExt, StreamExt};
+use futures::{stream::BoxStream, FutureExt, StreamExt, AsyncRead};
 use google_cloud_default::WithAuthExt;
 use google_cloud_storage::{
     client::{Client, ClientConfig},
@@ -33,6 +33,7 @@ fn transmute_result_for_s3error<T>(
 
 /// a safe string is a string that is safe to use in our little macros below
 /// ie, no slashes!
+#[derive(Debug, Clone)]
 pub(crate) struct SafeString {
     inner: String,
 }
@@ -153,15 +154,15 @@ struct PartsReader<'a> {
 impl<'a> PartsReader<'a> {
     async fn new(
         num_parts: u32,
-        client: Client,
-        bucket_name: String,
-        upload_id: String,
-        object_name: String,
+        client: &Client,
+        bucket_name: SafeString,
+        object_name: SafeString,
+        upload_id: SafeString,
     ) -> crate::multipart_uploads::PartsReader<'a> {
         let inner_stream = futures::stream::iter(1..=num_parts)
             .then(|part_number| {
                 let req = GetObjectRequest {
-                    bucket: bucket_name.clone(),
+                    bucket: BUCKET_NAME.to_string(),
                     object: multipart_loc_with_part!(
                         bucket_name,
                         object_name,
@@ -182,6 +183,16 @@ impl<'a> PartsReader<'a> {
             num_parts,
             inner_stream: Box::new(inner_stream),
         }
+    }
+}
+
+impl AsyncRead for PartsReader<'_> {
+    fn poll_read(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut [u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+        todo!()
     }
 }
 
@@ -551,6 +562,11 @@ impl CloudStorageForMultipartConstruction {
         if !parts.is_complete() {
             return Err(s3_error!(InvalidRequest, "invalid parts"));
         }
+
+        // this thing implements asyncread. go crazy.
+        let reader = PartsReader::new(parts.largest.into(), &self.client,
+            client_bucket_name, client_object_name, upload_id).await;
+
         todo!("reconstruct");
         todo!("put into wnfs");
         // delete it from cloud storage once we're done...
